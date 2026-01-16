@@ -1,144 +1,211 @@
-import 'package:untitled/models/config.dart';
 import 'package:flutter/material.dart';
 import 'package:mqtt_client/mqtt_client.dart';
-import 'package:mqtt_client/mqtt_server_client.dart';
+import 'package:untitled/services/mqtt_service.dart';
 
 void main() {
-  runApp(MyApp());
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
+  const MyApp({Key? key}) : super(key: key);
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      debugShowCheckedModeBanner: false,
       title: 'IoT Sensör Kontrol',
-      home: MyHomePage(),
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+        useMaterial3: true,
+      ),
+      home: const MyHomePage(),
     );
   }
 }
 
 class MyHomePage extends StatefulWidget {
+  const MyHomePage({Key? key}) : super(key: key);
+
   @override
-  _MyHomePageState createState() => _MyHomePageState();
+  State<MyHomePage> createState() => _MyHomePageState();
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  MqttServerClient? client;
-  late MqttConnectionState connectionState;
-  String sensorData = 'Şu anda veri yok';
+  final MqttService _mqttService = MqttService();
 
   @override
   void initState() {
     super.initState();
-    connectToMqtt();
-  }
-
-  void connectToMqtt() async {
-
-    client = MqttServerClient(MqttConfig.server,MqttConfig.clientIdentifier);
-    client!.port = MqttConfig.port;
-    client!.secure = false;
-    client!.logging(on: true);
-    client!.keepAlivePeriod = MqttClientConstants.defaultKeepAlive;
-    client!.onDisconnected = onDisconnected;
-
-    final connMessage = MqttConnectMessage()
-    // .authenticateAs(MqttConfig.username,MqttConfig.password)
-        .withClientIdentifier(MqttConfig.clientIdentifier)
-        .startClean();
-    client!.connectionMessage = connMessage;
-
-
-    try {
-      print('MQTT client connected');
-      await client!.connect(MqttConfig.username,MqttConfig.password);
-
-      client!.subscribe('sensor_data', MqttQos.atMostOnce);
-      client!.updates!.listen((List<MqttReceivedMessage<MqttMessage>> c) {
-        final MqttPublishMessage message = c[0].payload as MqttPublishMessage;
-        final String payload =
-        MqttPublishPayload.bytesToStringAsString(message.payload.message);
-        setState(() {
-          sensorData = payload;
-        });
-      });
-
-
-    }
-    catch (e) {
-      print('Exception: $e');
-      client!.disconnect();
-      // _onDisconnected();
-      // _disconnect();
-    }
-
-    /// Bağlı olup olmadığımızı kontrol eder
-    if (client!.connectionStatus!.state == MqttConnectionState.connected) {
-      print('MQTT client connected');
-      setState(() {
-        connectionState = client!.connectionStatus!.state;
-      });
-    } else {
-      print('ERROR: MQTT client connection failed - '
-          'disconnecting, state is ${client!.connectionStatus!.state}');
-      _disconnect();
-    }
-  }
-
-  void onDisconnected() {
-    print('Disconnected');
-    // MQTT aracısına yeniden bağlanın
-    connectToMqtt();
-  }
-  void _disconnect() {
-    client!.disconnect();
-    _onDisconnected();
-  }
-  void _onDisconnected() {
-    print('MQTT client disconnected');
-  }
-
-  void sendMqttCommand(String command) {
-    final  builder = MqttClientPayloadBuilder();
-    builder.addString(command);
-    client!.publishMessage('control', MqttQos.exactlyOnce, builder.payload!);
+    _mqttService.initialize();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('IoT Sensör Kontrol'),
+        title: const Text('IoT Sensör Kontrol'),
+        centerTitle: true,
+        actions: [
+          _buildConnectionIndicator(),
+        ],
       ),
       body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _buildSensorDisplay(),
+              const SizedBox(height: 40),
+              _buildControlPanel(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildConnectionIndicator() {
+    return ValueListenableBuilder<MqttConnectionState>(
+      valueListenable: _mqttService.connectionStateNotifier,
+      builder: (context, state, child) {
+        Color color;
+        String text;
+
+        switch (state) {
+          case MqttConnectionState.connected:
+            color = Colors.green;
+            text = 'Bağlı';
+            break;
+          case MqttConnectionState.disconnected:
+            color = Colors.red;
+            text = 'Bağlantı Yok';
+            break;
+          default:
+            color = Colors.orange;
+            text = 'Bağlanıyor...';
+        }
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+          child: Chip(
+            avatar: CircleAvatar(
+              backgroundColor: color,
+              radius: 6,
+            ),
+            label: Text(text),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildSensorDisplay() {
+    return Card(
+      elevation: 4,
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text('Sensör Verisi: $sensorData'),
-            SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () {
-                sendMqttCommand('suac');
-              },
-              child: Text('Su Aç'),
+            const Text(
+              'Sensör Verisi',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
             ),
-            ElevatedButton(
-              onPressed: () {
-                sendMqttCommand('sukapa');
+            const SizedBox(height: 16),
+            ValueListenableBuilder<String>(
+              valueListenable: _mqttService.sensorDataNotifier,
+              builder: (context, data, child) {
+                return Text(
+                  data,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 24,
+                    color: Colors.blueAccent,
+                  ),
+                );
               },
-              child: Text('Su Kapa'),
             ),
-            ElevatedButton(
-              onPressed: () {
-                sendMqttCommand('isikac');
-              },
-              child: Text('Işık Aç'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildControlPanel() {
+    return Column(
+      children: [
+        const Text(
+          'Kontrol Paneli',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 20),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            _ControlCard(
+              title: 'Su Kontrolü',
+              icon: Icons.water_drop,
+              onOn: () => _mqttService.publishMessage('control', 'suac'),
+              onOff: () => _mqttService.publishMessage('control', 'sukapa'),
             ),
+            _ControlCard(
+              title: 'Işık Kontrolü',
+              icon: Icons.lightbulb,
+              onOn: () => _mqttService.publishMessage('control', 'isikac'),
+              onOff: () => _mqttService.publishMessage('control', 'isikkapat'),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _ControlCard extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final VoidCallback onOn;
+  final VoidCallback onOff;
+
+  const _ControlCard({
+    Key? key,
+    required this.title,
+    required this.icon,
+    required this.onOn,
+    required this.onOff,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            Icon(icon, size: 40, color: Colors.blueGrey),
+            const SizedBox(height: 8),
+            Text(title, style: const TextStyle(fontWeight: FontWeight.w500)),
+            const SizedBox(height: 12),
             ElevatedButton(
-              onPressed: () {
-                sendMqttCommand('isikkapat');
-              },
-              child: Text('Işık Kapat'),
+              onPressed: onOn,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('AÇ'),
+            ),
+            const SizedBox(height: 8),
+            ElevatedButton(
+              onPressed: onOff,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('KAPAT'),
             ),
           ],
         ),
