@@ -27,8 +27,10 @@ class ControlCard extends StatelessWidget {
             const SizedBox(height: 8),
             Text(title, style: const TextStyle(fontWeight: FontWeight.w500)),
             const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 8,
+              runSpacing: 8,
               children: [
                 ElevatedButton(
                   onPressed: onOn,
@@ -36,16 +38,19 @@ class ControlCard extends StatelessWidget {
                     backgroundColor: Colors.green,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    visualDensity: VisualDensity.compact,
                   ),
                   child: const Text('AÇ'),
                 ),
-                const SizedBox(width: 8),
                 ElevatedButton(
                   onPressed: onOff,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.redAccent,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    visualDensity: VisualDensity.compact,
                   ),
                   child: const Text('KAPAT'),
                 ),
