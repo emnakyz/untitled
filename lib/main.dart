@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:mqtt_client/mqtt_client.dart';
 import 'package:untitled/services/mqtt_service.dart';
+import 'package:untitled/utils/app_constants.dart';
+import 'package:untitled/widgets/control_card.dart';
 
 void main() {
   runApp(const MyApp());
@@ -15,7 +17,7 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'IoT Sensör Kontrol',
       theme: ThemeData(
-        primarySwatch: Colors.blue,
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue), // Material 3 colorScheme
         useMaterial3: true,
       ),
       home: const MyHomePage(),
@@ -45,6 +47,7 @@ class _MyHomePageState extends State<MyHomePage> {
       appBar: AppBar(
         title: const Text('IoT Sensör Kontrol'),
         centerTitle: true,
+        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
           _buildConnectionIndicator(),
         ],
@@ -88,12 +91,16 @@ class _MyHomePageState extends State<MyHomePage> {
 
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16.0),
-          child: Chip(
-            avatar: CircleAvatar(
-              backgroundColor: color,
-              radius: 6,
+          child: Tooltip(
+            message: 'MQTT Bağlantı Durumu',
+            child: Chip(
+              avatar: CircleAvatar(
+                backgroundColor: color,
+                radius: 6,
+              ),
+              label: Text(text),
+              visualDensity: VisualDensity.compact,
             ),
-            label: Text(text),
           ),
         );
       },
@@ -121,9 +128,10 @@ class _MyHomePageState extends State<MyHomePage> {
                 return Text(
                   data,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 24,
-                    color: Colors.blueAccent,
+                    color: Theme.of(context).colorScheme.primary,
+                    fontWeight: FontWeight.w600,
                   ),
                 );
               },
@@ -145,17 +153,22 @@ class _MyHomePageState extends State<MyHomePage> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
-            _ControlCard(
-              title: 'Su Kontrolü',
-              icon: Icons.water_drop,
-              onOn: () => _mqttService.publishMessage('control', 'suac'),
-              onOff: () => _mqttService.publishMessage('control', 'sukapa'),
+            Expanded(
+              child: ControlCard(
+                title: 'Su Kontrolü',
+                icon: Icons.water_drop,
+                onOn: () => _mqttService.publishMessage(AppConstants.topicControl, AppConstants.cmdWaterOn),
+                onOff: () => _mqttService.publishMessage(AppConstants.topicControl, AppConstants.cmdWaterOff),
+              ),
             ),
-            _ControlCard(
-              title: 'Işık Kontrolü',
-              icon: Icons.lightbulb,
-              onOn: () => _mqttService.publishMessage('control', 'isikac'),
-              onOff: () => _mqttService.publishMessage('control', 'isikkapat'),
+            const SizedBox(width: 12),
+            Expanded(
+              child: ControlCard(
+                title: 'Işık Kontrolü',
+                icon: Icons.lightbulb,
+                onOn: () => _mqttService.publishMessage(AppConstants.topicControl, AppConstants.cmdLightOn),
+                onOff: () => _mqttService.publishMessage(AppConstants.topicControl, AppConstants.cmdLightOff),
+              ),
             ),
           ],
         ),
@@ -163,53 +176,4 @@ class _MyHomePageState extends State<MyHomePage> {
     );
   }
 }
-
-class _ControlCard extends StatelessWidget {
-  final String title;
-  final IconData icon;
-  final VoidCallback onOn;
-  final VoidCallback onOff;
-
-  const _ControlCard({
-    Key? key,
-    required this.title,
-    required this.icon,
-    required this.onOn,
-    required this.onOff,
-  }) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      elevation: 2,
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            Icon(icon, size: 40, color: Colors.blueGrey),
-            const SizedBox(height: 8),
-            Text(title, style: const TextStyle(fontWeight: FontWeight.w500)),
-            const SizedBox(height: 12),
-            ElevatedButton(
-              onPressed: onOn,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('AÇ'),
-            ),
-            const SizedBox(height: 8),
-            ElevatedButton(
-              onPressed: onOff,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('KAPAT'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
+// _ControlCard sınıfı buradan silinip ayrı dosyaya (lib/widgets/control_card.dart) taşındı.

@@ -1,46 +1,29 @@
-# IoT Sensor Control App
-
-A Flutter application for monitoring sensor data and controlling devices (Water and Light) via MQTT.
-
-## Features
-
-- **Real-time Monitoring**: Subscribes to `sensor_data` topic and displays live readings.
-- **Remote Control**: Publishes commands to `control` topic to toggle devices:
-  - Water (Start/Stop) -> `suac`, `sukapa`
-  - Lights (On/Off) -> `isikac`, `isikkapat`
-- **Connection Status**: Visual indicator for MQTT connection state.
-- **Robust Architecture**: Separation of concerns with a dedicated `MqttService` class.
-
-## Project Structure
-
+# IoT Sensör ve Kontrol Uygulamasý
+Bu Flutter projesi, MQTT protokolü üzerinden IoT cihazlarýyla iletiþim kurmak için geliþtirilmiþtir. Uzaktan sensör verilerini izlemenizi ve baðlý cihazlarý (örneðin su vanasý, ýþýklar) kontrol etmenizi saðlar.
+## Özellikler
+*   **Gerçek Zamanlý Veri Ýzleme:** MQTT üzerinden sensörlerden gelen anlýk verileri görüntüler.
+*   **Uzaktan Kontrol:** Uygulama üzerinden cihazlarý açýp kapatabilirsiniz (Su ve Iþýk kontrolü).
+*   **Baðlantý Durumu:** MQTT sunucusuna olan baðlantý durumu anlýk olarak gösterilir.
+*   **Otomatik Yeniden Baðlanma:** Baðlantý koptuðunda otomatik olarak tekrar baðlanmaya çalýþýr.
+## Proje Yapýsý
 ```
 lib/
-â”œâ”€â”€ models/
-â”‚   â””â”€â”€ config.dart       # MQTT Configuration constants
-â”œâ”€â”€ services/
-â”‚   â””â”€â”€ mqtt_service.dart # Usage of mqtt_client for connection management
-â””â”€â”€ main.dart             # UI Implementation
++¦¦ services/
+-   L¦¦ mqtt_service.dart      # MQTT baðlantý ve iletiþim mantýðý
++¦¦ utils/
+-   L¦¦ app_constants.dart     # Sabitler ve yapýlandýrma bilgileri
++¦¦ widgets/
+-   L¦¦ control_card.dart      # Tekrar kullanýlabilir kontrol kartý bileþeni
+L¦¦ main.dart                  # Ana uygulama ve UI
 ```
-
-## Getting Started
-
-1.  **Dependencies**:
-    Run `flutter pub get` to install the required packages.
-
-2.  **Configuration**:
-    Update `lib/models/config.dart` with your MQTT broker credentials.
-
-3.  **Run**:
-    ```bash
-    flutter run
-    ```
-
-## Requirements
-
-- Flutter SDK: >=3.2.3
-- Android SDK: 21+ (Compatible with Android 14)
-- An active MQTT Broker
-
-## License
-
-This project is open-source.
+## Kurulum ve Çalýþtýrma
+1.  Bu repoyu klonlayýn.
+2.  `flutter pub get` komutu ile baðýmlýlýklarý yükleyin.
+3.  `lib/utils/app_constants.dart` dosyasýndaki MQTT sunucu bilglerini kendi sunucunuza göre düzenleyin.
+4.  Cihazýnýzý baðlayýn veya emülatörü baþlatýn.
+5.  `flutter run` komutu ile uygulamayý çalýþtýrýn.
+## Kullanýlan Teknolojiler
+*   [Flutter](https://flutter.dev/)
+*   [mqtt_client](https://pub.dev/packages/mqtt_client) paketi
+## Notlar
+*   Bu proje bir demo niteliðindedir. Canlý ortamda kullanmadan önce `app_constants.dart` içindeki kimlik bilgilerini güvenli bir þekilde sakladýðýnýzdan emin olun.

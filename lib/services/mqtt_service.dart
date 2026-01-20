@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:mqtt_client/mqtt_client.dart';
 import 'package:mqtt_client/mqtt_server_client.dart';
-import '../models/config.dart';
+import '../utils/app_constants.dart';
 
 class MqttService {
   static final MqttService _instance = MqttService._internal();
@@ -17,10 +17,12 @@ class MqttService {
   final ValueNotifier<MqttConnectionState> connectionStateNotifier =
       ValueNotifier<MqttConnectionState>(MqttConnectionState.disconnected);
 
+  Timer? _reconnectTimer;
+
   Future<void> initialize() async {
     _client =
-        MqttServerClient(MqttConfig.server, MqttConfig.clientIdentifier);
-    _client!.port = MqttConfig.port;
+        MqttServerClient(AppConstants.mqttServer, AppConstants.mqttClientIdentifier);
+    _client!.port = AppConstants.mqttPort;
     _client!.secure = false;
     _client!.logging(on: kDebugMode);
     _client!.keepAlivePeriod = 20;
@@ -29,11 +31,18 @@ class MqttService {
     _client!.onSubscribed = _onSubscribed;
 
     final connMessage = MqttConnectMessage()
-        .authenticateAs(MqttConfig.username, MqttConfig.password)
-        .withClientIdentifier(MqttConfig.clientIdentifier)
+        .authenticateAs(AppConstants.mqttUsername, AppConstants.mqttPassword)
+        .withClientIdentifier(AppConstants.mqttClientIdentifier)
         .startClean() // Non persistent session for testing
         .withWillQos(MqttQos.atMostOnce);
     _client!.connectionMessage = connMessage;
+    _client!.autoReconnect = true; // Auto Reconnect aktif edildi
+
+    await _connect();
+  }
+
+  Future<void> _connect() async {
+     if (_client?.connectionStatus?.state == MqttConnectionState.connected) return;
 
     try {
       debugPrint('MQTT Connecting....');
@@ -46,7 +55,7 @@ class MqttService {
     if (_client!.connectionStatus!.state == MqttConnectionState.connected) {
       debugPrint('MQTT Client Connected');
       connectionStateNotifier.value = MqttConnectionState.connected;
-      _subscribeToTopic('sensor_data');
+      _subscribeToTopic(AppConstants.topicSensorData);
     } else {
       debugPrint(
           'MQTT Client connection failed - disconnecting, state is ${_client!.connectionStatus!.state}');
@@ -81,12 +90,16 @@ class MqttService {
   void _onConnected() {
     debugPrint('MQTT_LOG: Connected');
     connectionStateNotifier.value = MqttConnectionState.connected;
+    _reconnectTimer?.cancel();
   }
 
   void _onDisconnected() {
     debugPrint('MQTT_LOG: Disconnected');
     connectionStateNotifier.value = MqttConnectionState.disconnected;
-    // Auto reconnect logic could go here ideally with a exponential backoff
+    // Auto reconnect mantığı - kütüphanenin autoReconnect özelliği yetmezse manuel deneme
+    if (!_client!.autoReconnect) {
+       _reconnectTimer = Timer(const Duration(seconds: 5), _connect);
+    }
   }
 
   void _onSubscribed(String topic) {
