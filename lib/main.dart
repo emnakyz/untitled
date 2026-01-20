@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:mqtt_client/mqtt_client.dart';
 import 'package:untitled/services/mqtt_service.dart';
 import 'package:untitled/utils/app_constants.dart';
 import 'package:untitled/widgets/control_card.dart';
 
-void main() {
+Future<void> main() async {
+  await dotenv.load(fileName: ".env");
   runApp(const MyApp());
 }
 
@@ -39,6 +41,37 @@ class _MyHomePageState extends State<MyHomePage> {
   void initState() {
     super.initState();
     _mqttService.initialize();
+    _mqttService.connectionStateNotifier.addListener(_connectionListener);
+  }
+
+  @override
+  void dispose() {
+    _mqttService.connectionStateNotifier.removeListener(_connectionListener);
+    super.dispose();
+  }
+
+  void _connectionListener() {
+    final state = _mqttService.connectionStateNotifier.value;
+    String message = '';
+    Color backgroundColor = Colors.grey;
+
+    if (state == MqttConnectionState.connected) {
+      message = 'MQTT Bağlantısı Başarılı';
+      backgroundColor = Colors.green;
+    } else if (state == MqttConnectionState.disconnected) {
+      message = 'MQTT Bağlantısı Koptu';
+      backgroundColor = Colors.red;
+    }
+
+    if (message.isNotEmpty && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: backgroundColor,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
   }
 
   @override

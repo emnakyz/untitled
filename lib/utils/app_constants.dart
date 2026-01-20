@@ -1,9 +1,11 @@
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+
 class AppConstants {
-  static const String mqttServer = 'driver.cloudmqtt.com';
-  static const String mqttUsername = 'xnfrrtci';
-  static const String mqttPassword = 'FjrZfpbzhWrj'; // Güvenlik riski: Canlı ortamda gizlenmeli
-  static const String mqttClientIdentifier = 'Flutter_Android';
-  static const int mqttPort = 18968;
+  static String get mqttServer => dotenv.env['MQTT_SERVER'] ?? '';
+  static String get mqttUsername => dotenv.env['MQTT_USERNAME'] ?? '';
+  static String get mqttPassword => dotenv.env['MQTT_PASSWORD'] ?? '';
+  static String get mqttClientIdentifier => dotenv.env['MQTT_CLIENT_ID'] ?? 'Flutter_Client';
+  static int get mqttPort => int.tryParse(dotenv.env['MQTT_PORT'] ?? '1883') ?? 1883;
 
   // Topics
   static const String topicSensorData = 'sensor_data';
