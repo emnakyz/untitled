@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:mqtt_client/mqtt_client.dart';
 import 'package:mqtt_client/mqtt_server_client.dart';
+import '../models/sensor_data.dart';
 import '../utils/app_constants.dart';
 
 class MqttService {
@@ -14,8 +16,9 @@ class MqttService {
   MqttServerClient? _client;
   StreamSubscription? _updatesSubscription;
 
-  final ValueNotifier<String> sensorDataNotifier =
-      ValueNotifier<String>('Veri Bekleniyor...');
+  /// Parse edilmiş sensör verisi notifier'ı.
+  final ValueNotifier<SensorData?> sensorDataNotifier =
+      ValueNotifier<SensorData?>(null);
   final ValueNotifier<MqttConnectionState> connectionStateNotifier =
       ValueNotifier<MqttConnectionState>(MqttConnectionState.disconnected);
 
@@ -33,8 +36,6 @@ class MqttService {
 
     _client = MqttServerClient(server, AppConstants.mqttClientIdentifier);
     _client!.port = AppConstants.mqttPort;
-    _client!.secure = false;
-    _client!.logging(on: kDebugMode);
     _client!.keepAlivePeriod = 20;
     _client!.connectTimeoutPeriod = 5000;
     _client!.onDisconnected = _onDisconnected;
@@ -43,6 +44,17 @@ class MqttService {
     _client!.autoReconnect = true;
     _client!.onAutoReconnect = _onAutoReconnect;
     _client!.onAutoReconnected = _onAutoReconnected;
+
+    // Güvenlik: TLS kullan (port 8883) veya cleartext (port 1883)
+    if (AppConstants.mqttPort == 8883 || AppConstants.mqttUseTls) {
+      _client!.secure = true;
+      _client!.securityContext = SecurityContext.defaultContext;
+    } else {
+      _client!.secure = false;
+    }
+
+    // Debug modda loglama aç, ama release'de hassas bilgi loglanmasın
+    _client!.logging(on: kDebugMode);
 
     final connMessage = MqttConnectMessage()
         .authenticateAs(AppConstants.mqttUsername, AppConstants.mqttPassword)
@@ -99,8 +111,10 @@ class MqttService {
       final recMess = c[0].payload as MqttPublishMessage;
       final pt =
           MqttPublishPayload.bytesToStringAsString(recMess.payload.message);
-      sensorDataNotifier.value = pt;
-      debugPrint('MQTT_LOG: topic: <${c[0].topic}>, payload: <$pt>');
+
+      // Veriyi parse et
+      sensorDataNotifier.value = SensorData.fromPayload(pt);
+      debugPrint('MQTT_LOG: topic: <${c[0].topic}>, payload length: ${pt.length}');
     });
   }
 

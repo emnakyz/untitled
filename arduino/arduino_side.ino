@@ -1,215 +1,217 @@
+/*
+ * IoT Sensör ve Kontrol - Arduino/ESP8266 Tarafı
+ *
+ * Bu kod ESP8266 üzerinde çalışır ve şu işleri yapar:
+ * - DHT11 ile sıcaklık ve nem ölçümü
+ * - LDR ile ışık şiddeti ölçümü
+ * - MQTT üzerinden sensör verilerini yayınlama
+ * - MQTT üzerinden kontrol komutlarını alma (su/ışık açma-kapama)
+ *
+ * MQTT Topics:
+ *   sensor_data (publish) - "humidity,temperature,lightIntensity" formatında
+ *   control     (subscribe) - "suac", "sukapa", "isikac", "isikkapat" komutları
+ *
+ * ÖNEMLİ: WiFi ve MQTT kimlik bilgilerini kendi ortamınıza göre düzenleyin.
+ */
+
 #include <ESP8266WiFi.h>
 #include <DHT.h>
-#include <PubSubClient.h> //Messsage Broker için kütüphane eklendi.
- // Emin bu kodda sen float humidity, temperature ve lightIntensity degerleını mobıl app de sadece gostereceksın. ek olarak SUAC_PIN 5 ve ISIKAC_PIN 14 pınlerını acık kapalı konuma getormek ıcın serı ekrana yazmamız gereken metınlerı serı ekrana yazman gerekıyor. bu modul su an ınternete baglı kullanıcı adı ve sıfreyı degıstırererk ıstedıgın ınternet agına baglayabılırsın. 2 dıjıtal pının calısıp calısmamdıgını anlamak ıcın serı ekranı takıp edebılırsın, verdıgın komuta donus yapıyor. 
-#define DHTPIN 2      // DHT11 sensörünün bağlı olduğu pin
-#define DHTTYPE DHT11 // Kullanılan DHT sensör tipi
-#define LDRPIN A0      // LDR'nin bağlı olduğu analog pin
-#define SUAC_PIN 5    // Su açma kanalının bağlı olduğu pin (örnek olarak D1)
-#define ISIKAC_PIN 14 // Işık açma kanalının bağlı olduğu pin (örnek olarak D5)
+#include <PubSubClient.h>
 
+// ─── Pin Tanımları ───────────────────────────────────────
+#define DHTPIN      2       // DHT11 sensörünün bağlı olduğu pin (D4)
+#define DHTTYPE     DHT11   // Kullanılan DHT sensör tipi
+#define LDRPIN      A0      // LDR'nin bağlı olduğu analog pin
+#define SUAC_PIN    5       // Su açma rölesinin bağlı olduğu pin (D1)
+#define ISIKAC_PIN  14      // Işık açma rölesinin bağlı olduğu pin (D5)
 
-const char* ssid = "Tibax"; //Wifi ismi
-const char* password = "20202020";//wifi şifre
+// ─── Ağ Yapılandırması ───────────────────────────────────
+// GÜVENLİK NOTU: Gerçek projede bu bilgileri EEPROM veya
+// ayrı bir config dosyasında saklayın.
+const char* ssid          = "WIFI_SSID";        // WiFi ağ adı
+const char* password      = "WIFI_PASSWORD";    // WiFi şifresi
 
-const char* mqtt_server = "driver.cloudmqtt.com"; //mqtt server adı
-const int mqtt_port = 18968; //mqttt port numarası
-const char* mqtt_user = "xnfrrtci"; //mqtt kullanıcı adı 
-const char* mqtt_password = "FjrZfpbzhWrj"; //mqtt şifre adı
+// ─── MQTT Yapılandırması ─────────────────────────────────
+const char* mqtt_server   = "test.mosquitto.org"; // Flutter .env ile aynı olmalı
+const int   mqtt_port     = 1883;
+const char* mqtt_user     = "";                   // Boş ise anonim bağlantı
+const char* mqtt_password = "";
+const char* mqtt_client   = "ESP8266_IoT_Client";
 
+// ─── MQTT Topic'leri ─────────────────────────────────────
+const char* TOPIC_SENSOR  = "sensor_data";
+const char* TOPIC_CONTROL = "control";
 
+// ─── Zamanlama ───────────────────────────────────────────
+const unsigned long SENSOR_INTERVAL = 2000;  // Sensör okuma aralığı (ms)
+unsigned long lastSensorRead = 0;
 
-
-
+// ─── Nesneler ────────────────────────────────────────────
 DHT dht(DHTPIN, DHTTYPE);
 WiFiClient espClient;
 PubSubClient client(espClient);
 
+// ═══════════════════════════════════════════════════════════
+// WiFi Bağlantısı
+// ═══════════════════════════════════════════════════════════
+void setupWifi() {
+  delay(10);
+  Serial.println();
+  Serial.print("WiFi bağlanıyor: ");
+  Serial.println(ssid);
 
-// void setup_wifi() {
-  
-// }
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
 
-// void reconnect() {
-//   while (!client.connected()) {
-//     Serial.print("Attempting MQTT connection...");
-//     String clientId = "ESP8266Client - MyClient";
-//     // if (client.connect(clientId.c_str(), mqtt_user, mqtt_password)) 
-//     if (client.connect(clientId.c_str(), "yagiz34", "Birey1453"))
-//     {
-//       Serial.println("connected");
-//       client.subscribe("sensor_data");
-//       client.subscribe("control");
-//     } 
-//     else {
-//       Serial.print("failed, rc=");
-//       Serial.print(client.state());
-//       Serial.println(" try again in 5 seconds");
-//       delay(5000);
-//     }
-//   }
-// }
+  int attempts = 0;
+  while (WiFi.status() != WL_CONNECTED && attempts < 40) {
+    delay(500);
+    Serial.print(".");
+    attempts++;
+  }
 
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("\nWiFi bağlandı!");
+    Serial.print("IP: ");
+    Serial.println(WiFi.localIP());
+  } else {
+    Serial.println("\nWiFi bağlantısı başarısız! Yeniden deneniyor...");
+    ESP.restart();
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// MQTT Yeniden Bağlanma
+// ═══════════════════════════════════════════════════════════
+void reconnect() {
+  int retries = 0;
+  while (!client.connected() && retries < 5) {
+    Serial.print("MQTT bağlanıyor...");
+
+    bool connected;
+    if (strlen(mqtt_user) > 0) {
+      connected = client.connect(mqtt_client, mqtt_user, mqtt_password);
+    } else {
+      connected = client.connect(mqtt_client);
+    }
+
+    if (connected) {
+      Serial.println(" bağlandı!");
+      client.subscribe(TOPIC_CONTROL);
+      Serial.print("Abone olundu: ");
+      Serial.println(TOPIC_CONTROL);
+    } else {
+      Serial.print(" başarısız, rc=");
+      Serial.print(client.state());
+      Serial.println(" - 5 saniye sonra tekrar deneniyor...");
+      delay(5000);
+    }
+    retries++;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// MQTT Mesaj Callback
+// ═══════════════════════════════════════════════════════════
 void callback(char* topic, byte* payload, unsigned int length) {
-  Serial.print("Message arrived [");
-  Serial.print(topic);
-  Serial.print("] ");
-  
   String message = "";
-  for (int i = 0; i < length; i++) {
+  for (unsigned int i = 0; i < length; i++) {
     message += (char)payload[i];
   }
 
+  Serial.print("[");
+  Serial.print(topic);
+  Serial.print("] ");
   Serial.println(message);
 
-  if (String(topic) == "control") {
+  if (String(topic) == TOPIC_CONTROL) {
     if (message == "suac") {
       digitalWrite(SUAC_PIN, HIGH);
-      Serial.println("Su açma kanalı açıldı.");
+      Serial.println("-> Su AÇILDI");
     } else if (message == "sukapa") {
       digitalWrite(SUAC_PIN, LOW);
-      Serial.println("Su kapama kanalı açıldı.");
+      Serial.println("-> Su KAPANDI");
     } else if (message == "isikac") {
       digitalWrite(ISIKAC_PIN, HIGH);
-      Serial.println("Işık açma kanalı açıldı.");
+      Serial.println("-> Işık AÇILDI");
     } else if (message == "isikkapat") {
       digitalWrite(ISIKAC_PIN, LOW);
-      Serial.println("Işık kapama kanalı açıldı.");
+      Serial.println("-> Işık KAPANDI");
     } else {
-      Serial.println("Invalid command!");
+      Serial.print("-> Bilinmeyen komut: ");
+      Serial.println(message);
     }
   }
 }
 
+// ═══════════════════════════════════════════════════════════
+// Setup
+// ═══════════════════════════════════════════════════════════
 void setup() {
   Serial.begin(115200);
-//Wifi Başlangıcı
- delay(10);
-  Serial.println();
-  Serial.print("Connecting to ");
-  Serial.println(ssid);
+  Serial.println("\n=== IoT Sensör ve Kontrol Başlatılıyor ===");
 
-  WiFi.begin(ssid, password);
-
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
-
-  Serial.println("");
-  Serial.println("WiFi connected");
-  Serial.println("IP address: ");
-  Serial.println(WiFi.localIP());
-//Wifi Sonu
-
-  // MQTT bağlantısı başlangıcı
-  client.setServer(mqtt_server, mqtt_port);
-  client.setCallback(callback);
-
-   while (!client.connected()) {
-    Serial.print("Attempting MQTT connection...");
-    String clientId = "ESP8266Client - MyClient";
-
-    if (client.connect(clientId.c_str(), mqtt_user, mqtt_password))
-    {
-      Serial.println("connected");
-      client.subscribe("sensor_data");
-      client.subscribe("control");
-    } 
-    else {
-      Serial.print("failed, rc=");
-      Serial.print(client.state());
-      Serial.println(" try again in 5 seconds");
-      delay(5000);
-    }
-  }
-  // MQTT bağlantısı sonu
-
+  // GPIO ayarları
   pinMode(SUAC_PIN, OUTPUT);
   pinMode(ISIKAC_PIN, OUTPUT);
-
-  // Başlangıçta tüm çıkışları kapalı konuma getirin
   digitalWrite(SUAC_PIN, LOW);
   digitalWrite(ISIKAC_PIN, LOW);
 
+  // DHT sensörü başlat
   dht.begin();
 
+  // WiFi bağlantısı
+  setupWifi();
+
+  // MQTT bağlantısı
+  client.setServer(mqtt_server, mqtt_port);
+  client.setCallback(callback);
+  reconnect();
+
+  Serial.println("=== Sistem Hazır ===\n");
 }
 
-// void loop() {
-//       // Sıcaklık ve nem ölçümü yap
-//     float humidity = dht.readHumidity();
-//     float temperature = dht.readTemperature();
-
-//     // Işık şiddeti ölçümü yap
-//     int lightIntensity = analogRead(LDRPIN);
-
-//     // Sensör değerlerini seri monitöre yazdır
-//     Serial.print("Nem: ");
-//     Serial.print(humidity);
-//     Serial.print(" %\t");
-//     Serial.print("Sıcaklık: ");
-//     Serial.print(temperature);
-//     Serial.print(" °C\t");
-//     Serial.print("Işık Şiddeti: ");
-//     Serial.println(lightIntensity);
-//     delay(5000);
-  
-  
-//   if (Serial.available() > 0) {
-//     String command = Serial.readStringUntil('\n');
-
-//     if (command == "suac") {
-//       digitalWrite(SUAC_PIN, HIGH);
-//       Serial.println("Su açma kanalı açıldı.");
-//     } else if (command == "sukapa") {
-//       digitalWrite(SUAC_PIN, LOW);
-//       Serial.println("Su kapama kanalı açıldı.");
-//     } else if (command == "ısıkac") {
-//       digitalWrite(    , HIGH);
-//       Serial.println("Işık açma kanalı açıldı.");
-//     } else if (command == "ısıkkapat") {
-//       digitalWrite(ISIKAC_PIN, LOW);
-//       Serial.println("Işık kapama kanalı açıldı.");
-//     } else {
-//       Serial.println("Geçersiz komut!");
-//     }
-
-
-
-//     // Bir süre sonra çıkışları kapat
-//     delay(1000);
-//     digitalWrite(SUAC_PIN, LOW);
-//     digitalWrite(ISIKAC_PIN, LOW);
-//   }
-// }
-
+// ═══════════════════════════════════════════════════════════
+// Ana Döngü
+// ═══════════════════════════════════════════════════════════
 void loop() {
-  // if (!client.connected()) {
-  //   // reconnect();
-  // }
+  // MQTT bağlantı kontrolü
+  if (!client.connected()) {
+    reconnect();
+  }
   client.loop();
 
-  float humidity = dht.readHumidity();
-  float temperature = dht.readTemperature();
-  int lightIntensity = analogRead(LDRPIN);
+  // Sensör okuma (belirli aralıklarla)
+  unsigned long now = millis();
+  if (now - lastSensorRead >= SENSOR_INTERVAL) {
+    lastSensorRead = now;
 
-    // Serial.print("Nem: ");
-    // Serial.print(humidity);
-    // Serial.print(" %\t");
-    // Serial.print("Sıcaklık: ");
-    // Serial.print(temperature);
-    // Serial.print(" °C\t");
-    // Serial.print("Işık Şiddeti: ");
-    // Serial.println(lightIntensity);
+    float humidity    = dht.readHumidity();
+    float temperature = dht.readTemperature();
+    int   lightValue  = analogRead(LDRPIN);
 
-  String sensor_data = String(humidity) + "," + String(temperature) + "," + String(lightIntensity);
-  client.publish("sensor_data", sensor_data.c_str());
+    // NaN kontrolü
+    if (isnan(humidity) || isnan(temperature)) {
+      Serial.println("DHT okuma hatası!");
+      return;
+    }
 
+    // Veri formatı: Flutter SensorData.fromPayload() ile uyumlu
+    // Format: "humidity,temperature,lightIntensity"
+    String sensorPayload = String(humidity, 1) + ","
+                         + String(temperature, 1) + ","
+                         + String(lightValue);
 
+    client.publish(TOPIC_SENSOR, sensorPayload.c_str());
 
-  delay(500);
+    // Seri monitöre de yazdır
+    Serial.print("Nem: ");
+    Serial.print(humidity, 1);
+    Serial.print("% | Sıcaklık: ");
+    Serial.print(temperature, 1);
+    Serial.print("°C | Işık: ");
+    Serial.print(lightValue);
+    Serial.print(" | MQTT: ");
+    Serial.println(sensorPayload);
+  }
 }
-
-
-

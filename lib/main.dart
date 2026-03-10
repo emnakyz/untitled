@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:mqtt_client/mqtt_client.dart';
+import 'package:untitled/models/sensor_data.dart';
 import 'package:untitled/services/mqtt_service.dart';
 import 'package:untitled/utils/app_constants.dart';
 import 'package:untitled/widgets/control_card.dart';
@@ -18,10 +19,19 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'IoT Sensör Kontrol',
+      title: 'IoT Kontrol',
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF007AFF),
+          brightness: Brightness.light,
+        ),
         useMaterial3: true,
+        scaffoldBackgroundColor: const Color(0xFFF2F2F7),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFFF2F2F7),
+          elevation: 0,
+          scrolledUnderElevation: 0.5,
+        ),
       ),
       home: const MyHomePage(),
     );
@@ -59,17 +69,20 @@ class _MyHomePageState extends State<MyHomePage> {
 
     if (state == MqttConnectionState.connected) {
       message = 'MQTT Bağlantısı Başarılı';
-      backgroundColor = Colors.green;
+      backgroundColor = const Color(0xFF34C759);
     } else if (state == MqttConnectionState.disconnected) {
       message = 'MQTT Bağlantısı Koptu';
-      backgroundColor = Colors.red;
+      backgroundColor = const Color(0xFFFF3B30);
     }
 
     if (message.isNotEmpty && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(message),
+          content: Text(message, style: const TextStyle(fontWeight: FontWeight.w500)),
           backgroundColor: backgroundColor,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          margin: const EdgeInsets.all(16),
           duration: const Duration(seconds: 2),
         ),
       );
@@ -79,26 +92,44 @@ class _MyHomePageState extends State<MyHomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('IoT Sensör Kontrol'),
-        centerTitle: true,
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        actions: [
-          _buildConnectionIndicator(),
-        ],
-      ),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _buildSensorDisplay(),
-              const SizedBox(height: 40),
-              _buildControlPanel(),
-            ],
-          ),
+      body: SafeArea(
+        child: CustomScrollView(
+          slivers: [
+            SliverAppBar(
+              pinned: true,
+              title: const Text(
+                'IoT Kontrol',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 28),
+              ),
+              actions: [_buildConnectionIndicator()],
+            ),
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              sliver: SliverList(
+                delegate: SliverChildListDelegate([
+                  const SizedBox(height: 8),
+                  _buildSensorDisplay(),
+                  const SizedBox(height: 24),
+                  _buildSectionHeader('Kontroller'),
+                  const SizedBox(height: 12),
+                  _buildControlPanel(),
+                  const SizedBox(height: 32),
+                ]),
+              ),
+            ),
+          ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title) {
+    return Text(
+      title,
+      style: TextStyle(
+        fontSize: 20,
+        fontWeight: FontWeight.w700,
+        color: Colors.grey.shade800,
       ),
     );
   }
@@ -112,29 +143,47 @@ class _MyHomePageState extends State<MyHomePage> {
 
         switch (state) {
           case MqttConnectionState.connected:
-            color = Colors.green;
+            color = const Color(0xFF34C759);
             text = 'Bağlı';
             break;
           case MqttConnectionState.disconnected:
-            color = Colors.red;
+            color = const Color(0xFFFF3B30);
             text = 'Bağlantı Yok';
             break;
           default:
-            color = Colors.orange;
+            color = const Color(0xFFFF9500);
             text = 'Bağlanıyor...';
         }
 
         return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0),
-          child: Tooltip(
-            message: 'MQTT Bağlantı Durumu',
-            child: Chip(
-              avatar: CircleAvatar(
-                backgroundColor: color,
-                radius: 6,
-              ),
-              label: Text(text),
-              visualDensity: VisualDensity.compact,
+          padding: const EdgeInsets.only(right: 16),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: color,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  text,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ),
           ),
         );
@@ -143,69 +192,215 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   Widget _buildSensorDisplay() {
-    return Card(
-      elevation: 4,
-      child: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
+    return ValueListenableBuilder<SensorData?>(
+      valueListenable: _mqttService.sensorDataNotifier,
+      builder: (context, data, child) {
+        if (data == null) {
+          return _buildWaitingCard();
+        }
+
+        if (!data.hasData) {
+          return _buildRawDataCard(data.rawData ?? 'Bilinmeyen format');
+        }
+
+        final metrics = data.metrics;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Sensör Verisi',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 16),
-            ValueListenableBuilder<String>(
-              valueListenable: _mqttService.sensorDataNotifier,
-              builder: (context, data, child) {
-                return Text(
-                  data,
-                  textAlign: TextAlign.center,
+            _buildSectionHeader('Sensör Verileri'),
+            if (data.location != null || data.sensorType != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 4, bottom: 8),
+                child: Text(
+                  [
+                    if (data.sensorType != null) data.sensorType,
+                    if (data.location != null) data.location,
+                  ].join(' • '),
                   style: TextStyle(
-                    fontSize: 24,
-                    color: Theme.of(context).colorScheme.primary,
-                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                    color: Colors.grey.shade500,
+                    fontWeight: FontWeight.w500,
                   ),
-                );
+                ),
+              ),
+            const SizedBox(height: 12),
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                mainAxisSpacing: 12,
+                crossAxisSpacing: 12,
+                childAspectRatio: 1.6,
+              ),
+              itemCount: metrics.length,
+              itemBuilder: (context, index) {
+                return _buildMetricCard(metrics[index]);
               },
             ),
           ],
-        ),
+        );
+      },
+    );
+  }
+
+  Widget _buildMetricCard(SensorMetric metric) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              Text(metric.icon, style: const TextStyle(fontSize: 18)),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  metric.label,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.grey.shade600,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              metric.value,
+              style: const TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF1C1C1E),
+                letterSpacing: -0.5,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWaitingCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(32),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Icon(Icons.sensors, size: 48, color: Colors.grey.shade300),
+          const SizedBox(height: 16),
+          Text(
+            'Sensör Verisi Bekleniyor...',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+              color: Colors.grey.shade500,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'MQTT bağlantısı kurulduğunda veriler otomatik gösterilecek',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 13,
+              color: Colors.grey.shade400,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRawDataCard(String rawData) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Ham Veri',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: Colors.grey.shade500,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            rawData,
+            style: const TextStyle(
+              fontSize: 14,
+              fontFamily: 'monospace',
+              color: Color(0xFF1C1C1E),
+            ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildControlPanel() {
-    return Column(
+    return Row(
       children: [
-        const Text(
-          'Kontrol Paneli',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        Expanded(
+          child: ControlCard(
+            title: 'Su',
+            icon: Icons.water_drop_rounded,
+            onOn: () => _mqttService.publishMessage(
+                AppConstants.topicControl, AppConstants.cmdWaterOn),
+            onOff: () => _mqttService.publishMessage(
+                AppConstants.topicControl, AppConstants.cmdWaterOff),
+          ),
         ),
-        const SizedBox(height: 20),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            Expanded(
-              child: ControlCard(
-                title: 'Su Kontrolü',
-                icon: Icons.water_drop,
-                onOn: () => _mqttService.publishMessage(AppConstants.topicControl, AppConstants.cmdWaterOn),
-                onOff: () => _mqttService.publishMessage(AppConstants.topicControl, AppConstants.cmdWaterOff),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: ControlCard(
-                title: 'Işık Kontrolü',
-                icon: Icons.lightbulb,
-                onOn: () => _mqttService.publishMessage(AppConstants.topicControl, AppConstants.cmdLightOn),
-                onOff: () => _mqttService.publishMessage(AppConstants.topicControl, AppConstants.cmdLightOff),
-              ),
-            ),
-          ],
+        const SizedBox(width: 12),
+        Expanded(
+          child: ControlCard(
+            title: 'Işık',
+            icon: Icons.lightbulb_rounded,
+            onOn: () => _mqttService.publishMessage(
+                AppConstants.topicControl, AppConstants.cmdLightOn),
+            onOff: () => _mqttService.publishMessage(
+                AppConstants.topicControl, AppConstants.cmdLightOff),
+          ),
         ),
       ],
     );
