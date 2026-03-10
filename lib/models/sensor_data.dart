@@ -1,5 +1,5 @@
 /// Arduino/ESP'den gelen sensör verisini parse eden model.
-///
+///.
 /// Desteklenen formatlar:
 /// - Arduino DHT+LDR: "humidity,temperature,lightIntensity"
 /// - SEN5x extended:  "key=value,key=value,..." (air_quality formatı)
