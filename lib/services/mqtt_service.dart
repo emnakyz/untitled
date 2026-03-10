@@ -12,69 +12,96 @@ class MqttService {
   MqttService._internal();
 
   MqttServerClient? _client;
+  StreamSubscription? _updatesSubscription;
+
   final ValueNotifier<String> sensorDataNotifier =
       ValueNotifier<String>('Veri Bekleniyor...');
   final ValueNotifier<MqttConnectionState> connectionStateNotifier =
       ValueNotifier<MqttConnectionState>(MqttConnectionState.disconnected);
 
   Timer? _reconnectTimer;
+  bool _isConnecting = false;
 
+  /// MQTT istemcisini başlatır ve bağlantı kurar.
   Future<void> initialize() async {
-    _client =
-        MqttServerClient(AppConstants.mqttServer, AppConstants.mqttClientIdentifier);
+    final server = AppConstants.mqttServer;
+    if (server.isEmpty) {
+      debugPrint(
+          'MQTT_LOG: MQTT_SERVER .env dosyasında tanımlı değil, bağlantı atlanıyor.');
+      return;
+    }
+
+    _client = MqttServerClient(server, AppConstants.mqttClientIdentifier);
     _client!.port = AppConstants.mqttPort;
     _client!.secure = false;
     _client!.logging(on: kDebugMode);
     _client!.keepAlivePeriod = 20;
+    _client!.connectTimeoutPeriod = 5000;
     _client!.onDisconnected = _onDisconnected;
     _client!.onConnected = _onConnected;
     _client!.onSubscribed = _onSubscribed;
+    _client!.autoReconnect = true;
+    _client!.onAutoReconnect = _onAutoReconnect;
+    _client!.onAutoReconnected = _onAutoReconnected;
 
     final connMessage = MqttConnectMessage()
         .authenticateAs(AppConstants.mqttUsername, AppConstants.mqttPassword)
         .withClientIdentifier(AppConstants.mqttClientIdentifier)
-        .startClean() // Non persistent session for testing
+        .startClean()
         .withWillQos(MqttQos.atMostOnce);
     _client!.connectionMessage = connMessage;
-    _client!.autoReconnect = true; // Auto Reconnect aktif edildi
 
     await _connect();
   }
 
   Future<void> _connect() async {
-     if (_client?.connectionStatus?.state == MqttConnectionState.connected) return;
+    if (_isConnecting) return;
+    if (_client?.connectionStatus?.state == MqttConnectionState.connected) {
+      return;
+    }
+
+    _isConnecting = true;
+    connectionStateNotifier.value = MqttConnectionState.connecting;
 
     try {
       debugPrint('MQTT Connecting....');
       await _client!.connect();
     } on Exception catch (e) {
       debugPrint('MQTT Client exception - $e');
-      _client!.disconnect();
+      _client?.disconnect();
+    } finally {
+      _isConnecting = false;
     }
 
-    if (_client!.connectionStatus!.state == MqttConnectionState.connected) {
+    if (_client?.connectionStatus?.state == MqttConnectionState.connected) {
       debugPrint('MQTT Client Connected');
       connectionStateNotifier.value = MqttConnectionState.connected;
       _subscribeToTopic(AppConstants.topicSensorData);
     } else {
       debugPrint(
-          'MQTT Client connection failed - disconnecting, state is ${_client!.connectionStatus!.state}');
-      _client!.disconnect();
+          'MQTT Client connection failed - state is ${_client?.connectionStatus?.state}');
+      connectionStateNotifier.value = MqttConnectionState.disconnected;
     }
   }
 
   void _subscribeToTopic(String topic) {
-    if (_client?.connectionStatus?.state == MqttConnectionState.connected) {
-      _client!.subscribe(topic, MqttQos.atMostOnce);
-      _client!.updates!.listen((List<MqttReceivedMessage<MqttMessage?>>? c) {
-        final MqttPublishMessage recMess = c![0].payload as MqttPublishMessage;
-        final String pt =
-            MqttPublishPayload.bytesToStringAsString(recMess.payload.message);
-        sensorDataNotifier.value = pt;
-        debugPrint(
-            'MQTT_LOG: New data arrived: topic is <${c[0].topic}>, payload is <-- $pt -->');
-      });
+    if (_client?.connectionStatus?.state != MqttConnectionState.connected) {
+      return;
     }
+
+    _client!.subscribe(topic, MqttQos.atMostOnce);
+
+    // Önceki dinleyiciyi iptal et, çift dinlemeyi önle
+    _updatesSubscription?.cancel();
+    _updatesSubscription =
+        _client!.updates!.listen((List<MqttReceivedMessage<MqttMessage?>>? c) {
+      if (c == null || c.isEmpty) return;
+      final recMess = c[0].payload as MqttPublishMessage;
+      final pt =
+          MqttPublishPayload.bytesToStringAsString(recMess.payload.message);
+      sensorDataNotifier.value = pt;
+      debugPrint('MQTT_LOG: topic: <${c[0].topic}>, payload: <$pt>');
+    });
   }
 
   void publishMessage(String topic, String message) {
@@ -96,10 +123,17 @@ class MqttService {
   void _onDisconnected() {
     debugPrint('MQTT_LOG: Disconnected');
     connectionStateNotifier.value = MqttConnectionState.disconnected;
-    // Auto reconnect mantığı - kütüphanenin autoReconnect özelliği yetmezse manuel deneme
-    if (!_client!.autoReconnect) {
-       _reconnectTimer = Timer(const Duration(seconds: 5), _connect);
-    }
+  }
+
+  void _onAutoReconnect() {
+    debugPrint('MQTT_LOG: Auto reconnect başlatıldı...');
+    connectionStateNotifier.value = MqttConnectionState.connecting;
+  }
+
+  void _onAutoReconnected() {
+    debugPrint('MQTT_LOG: Auto reconnect başarılı');
+    connectionStateNotifier.value = MqttConnectionState.connected;
+    _subscribeToTopic(AppConstants.topicSensorData);
   }
 
   void _onSubscribed(String topic) {
@@ -107,6 +141,15 @@ class MqttService {
   }
 
   void disconnect() {
+    _reconnectTimer?.cancel();
+    _updatesSubscription?.cancel();
     _client?.disconnect();
+  }
+
+  /// Kaynakları serbest bırakır.
+  void dispose() {
+    disconnect();
+    sensorDataNotifier.dispose();
+    connectionStateNotifier.dispose();
   }
 }

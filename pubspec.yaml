@@ -1,8 +1,7 @@
 name: untitled
-description: "A new Flutter project."
+description: "IoT Sensör ve Kontrol Uygulaması - MQTT üzerinden Arduino/ESP ile iletişim"
 
 publish_to: 'none'
-
 
 version: 1.0.0+1
 
@@ -13,7 +12,7 @@ dependencies:
   flutter:
     sdk: flutter
   mqtt_client: ^10.0.1
-  cupertino_icons: ^1.0.2
+  cupertino_icons: ^1.0.6
   flutter_dotenv: ^6.0.0
 
 dev_dependencies:

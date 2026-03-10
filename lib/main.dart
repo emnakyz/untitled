@@ -6,6 +6,7 @@ import 'package:untitled/utils/app_constants.dart';
 import 'package:untitled/widgets/control_card.dart';
 
 Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: ".env");
   runApp(const MyApp());
 }
@@ -19,7 +20,7 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'IoT Sensör Kontrol',
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue), // Material 3 colorScheme
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
         useMaterial3: true,
       ),
       home: const MyHomePage(),
@@ -47,6 +48,7 @@ class _MyHomePageState extends State<MyHomePage> {
   @override
   void dispose() {
     _mqttService.connectionStateNotifier.removeListener(_connectionListener);
+    _mqttService.disconnect();
     super.dispose();
   }
 
@@ -209,4 +211,3 @@ class _MyHomePageState extends State<MyHomePage> {
     );
   }
 }
-// _ControlCard sınıfı buradan silinip ayrı dosyaya (lib/widgets/control_card.dart) taşındı.

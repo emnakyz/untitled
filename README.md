@@ -1,29 +1,70 @@
-# IoT Sensör ve Kontrol Uygulaması
-Bu Flutter projesi, MQTT protokolü üzerinden IoT cihazlarıyla iletişim kurmak için geliştirilmiştir. Uzaktan sensör verilerini izlemenizi ve bağlı cihazları (örneğin su vanası, ışıklar) kontrol etmenizi sağlar.
-## Özellikler
-*   **Gerçek Zamanlı Veri İzleme:** MQTT üzerinden sensörlerden gelen anlık verileri görüntüler.
-*   **Uzaktan Kontrol:** Uygulama üzerinden cihazları açıp kapatabilirsiniz (Su ve Işık kontrolü).
-*   **Bağlantı Durumu:** MQTT sunucusuna olan bağlantı durumu anlık olarak gösterilir.
-*   **Otomatik Yeniden Bağlanma:** Bağlantı koptuğunda otomatik olarak tekrar bağlanmaya çalışır.
-## Proje Yapısı
+# IoT SensÃ¶r ve Kontrol UygulamasÄ±
+Bu Flutter projesi, MQTT protokolÃ¼ Ã¼zerinden IoT cihazlarÄ±yla (Arduino/ESP) iletiÅŸim kurmak iÃ§in geliÅŸtirilmiÅŸtir. Uzaktan sensÃ¶r verilerini izlemenizi ve baÄŸlÄ± cihazlarÄ± kontrol etmenizi saÄŸlar.
+## Ã–zellikler
+- **GerÃ§ek ZamanlÄ± Veri Ä°zleme:** MQTT Ã¼zerinden sensÃ¶rlerden gelen anlÄ±k verileri gÃ¶rÃ¼ntÃ¼ler.
+- **Uzaktan Kontrol:** Uygulama Ã¼zerinden cihazlarÄ± aÃ§Ä±p kapatabilirsiniz (Su ve IÅŸÄ±k kontrolÃ¼).
+- **BaÄŸlantÄ± Durumu:** MQTT sunucusuna olan baÄŸlantÄ± durumu anlÄ±k olarak gÃ¶sterilir.
+- **Otomatik Yeniden BaÄŸlanma:** BaÄŸlantÄ± koptuÄŸunda otomatik olarak tekrar baÄŸlanmaya Ã§alÄ±ÅŸÄ±r.
+- **GÃ¼venli YapÄ±landÄ±rma:** MQTT kimlik bilgileri `.env` dosyasÄ±nda saklanÄ±r, repoya dahil edilmez.
+## Proje YapÄ±sÄ±
 ```
 lib/
-+¦¦ services/
--   L¦¦ mqtt_service.dart      # MQTT bağlantı ve iletişim mantığı
-+¦¦ utils/
--   L¦¦ app_constants.dart     # Sabitler ve yapılandırma bilgileri
-+¦¦ widgets/
--   L¦¦ control_card.dart      # Tekrar kullanılabilir kontrol kartı bileşeni
-L¦¦ main.dart                  # Ana uygulama ve UI
+â”œâ”€â”€ main.dart                  # Ana uygulama ve UI
+â”œâ”€â”€ services/
+â”‚   â””â”€â”€ mqtt_service.dart      # MQTT baÄŸlantÄ± ve iletiÅŸim mantÄ±ÄŸÄ±
+â”œâ”€â”€ utils/
+â”‚   â””â”€â”€ app_constants.dart     # Sabitler ve yapÄ±landÄ±rma (.env okuma)
+â””â”€â”€ widgets/
+    â””â”€â”€ control_card.dart      # Tekrar kullanÄ±labilir kontrol kartÄ± bileÅŸeni
+arduino/
+â””â”€â”€ arduino_side.ino           # Arduino/ESP tarafÄ± kaynak kodu
 ```
-## Kurulum ve Çalıştırma
-1.  Bu repoyu klonlayın.
-2.  `flutter pub get` komutu ile bağımlılıkları yükleyin.
-3.  `lib/utils/app_constants.dart` dosyasındaki MQTT sunucu bilglerini kendi sunucunuza göre düzenleyin.
-4.  Cihazınızı bağlayın veya emülatörü başlatın.
-5.  `flutter run` komutu ile uygulamayı çalıştırın.
-## Kullanılan Teknolojiler
-*   [Flutter](https://flutter.dev/)
-*   [mqtt_client](https://pub.dev/packages/mqtt_client) paketi
+## Gereksinimler
+- Flutter SDK >= 3.2.3
+- Dart SDK >= 3.2.3
+- Android SDK (Android build iÃ§in)
+- Ã‡alÄ±ÅŸan bir MQTT broker (test iÃ§in: `test.mosquitto.org`)
+## Kurulum ve Ã‡alÄ±ÅŸtÄ±rma
+1. Bu repoyu klonlayÄ±n:
+   ```bash
+   git clone <repo-url>
+   cd untitled
+   ```
+2. Proje kÃ¶k dizininde `.env` dosyasÄ± oluÅŸturun:
+   ```env
+   MQTT_SERVER=test.mosquitto.org
+   MQTT_USERNAME=
+   MQTT_PASSWORD=
+   MQTT_CLIENT_ID=Flutter_Client
+   MQTT_PORT=1883
+   ```
+3. BaÄŸÄ±mlÄ±lÄ±klarÄ± yÃ¼kleyin:
+   ```bash
+   flutter pub get
+   ```
+4. CihazÄ±nÄ±zÄ± baÄŸlayÄ±n veya emulatÃ¶rÃ¼ baÅŸlatÄ±n.
+5. UygulamayÄ± Ã§alÄ±ÅŸtÄ±rÄ±n:
+   ```bash
+   flutter run
+   ```
+## MQTT KonularÄ± (Topics)
+| Konu            | YÃ¶n              | AÃ§Ä±klama                        |
+|-----------------|------------------|---------------------------------|
+| `sensor_data`   | Arduino â†’ Uygulama | SensÃ¶r verilerini taÅŸÄ±r         |
+| `control`       | Uygulama â†’ Arduino | Kontrol komutlarÄ±nÄ± taÅŸÄ±r       |
+## Kontrol KomutlarÄ±
+| Komut      | AÃ§Ä±klama            |
+|------------|----------------------|
+| `suac`     | Su vanasÄ±nÄ± aÃ§       |
+| `sukapa`   | Su vanasÄ±nÄ± kapat    |
+| `isikac`   | IÅŸÄ±ÄŸÄ± aÃ§             |
+| `isikkapat`| IÅŸÄ±ÄŸÄ± kapat          |
+## KullanÄ±lan Teknolojiler
+- [Flutter](https://flutter.dev/) - UI framework
+- [mqtt_client](https://pub.dev/packages/mqtt_client) - MQTT iletiÅŸim
+- [flutter_dotenv](https://pub.dev/packages/flutter_dotenv) - Ortam deÄŸiÅŸkenleri yÃ¶netimi
 ## Notlar
-*   Bu proje bir demo niteliğindedir. Canlı ortamda kullanmadan önce `app_constants.dart` içindeki kimlik bilgilerini güvenli bir şekilde sakladığınızdan emin olun.
+- Bu proje bir demo/prototip niteliÄŸindedir.
+- `.env` dosyasÄ± `.gitignore` iÃ§inde tanÄ±mlÄ±dÄ±r ve repoya dahil edilmez.
+- CanlÄ± ortamda kullanmadan Ã¶nce MQTT kimlik bilgilerinizi gÃ¼venli ÅŸekilde saklayÄ±n.
+- Arduino tarafÄ± kodu `arduino/arduino_side.ino` dosyasÄ±nda bulunmaktadÄ±r.

@@ -20,39 +20,54 @@ class ControlCard extends StatelessWidget {
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(12.0),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 40, color: Colors.blueGrey),
+            Icon(icon, size: 36, color: Colors.blueGrey),
             const SizedBox(height: 8),
-            Text(title, style: const TextStyle(fontWeight: FontWeight.w500)),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                title,
+                style: const TextStyle(fontWeight: FontWeight.w500),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
             const SizedBox(height: 12),
             Wrap(
               alignment: WrapAlignment.center,
-              spacing: 8,
-              runSpacing: 8,
+              spacing: 6,
+              runSpacing: 6,
               children: [
                 ElevatedButton(
                   onPressed: onOn,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.green,
                     foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     visualDensity: VisualDensity.compact,
+                    minimumSize: const Size(0, 32),
                   ),
-                  child: const Text('AÇ'),
+                  child: const Text('AÇ', style: TextStyle(fontSize: 13)),
                 ),
                 ElevatedButton(
                   onPressed: onOff,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.redAccent,
                     foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     visualDensity: VisualDensity.compact,
+                    minimumSize: const Size(0, 32),
                   ),
-                  child: const Text('KAPAT'),
+                  child: const Text('KAPAT', style: TextStyle(fontSize: 13)),
                 ),
               ],
             ),
